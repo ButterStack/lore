@@ -1,0 +1,14 @@
+# Explanation
+
+Conceptual writing about why Lore works the way it does.
+
+## What this folder is
+
+Explanation is the *why* of Lore. These pages make connections, give context, and dig into the choices and history behind the design. They're about understanding, not about getting a task done.
+
+## Suggested starting points
+
+- **Writing a new Explanation page?** Start at the [doc-standards walkthrough](../developing/doc-standards/writing-a-doc.md).
+- [Explanation template](explanation-template.md). Copy this when starting a new Explanation.
+
+See [docs/README.md](../README.md) for the full docs structure.
