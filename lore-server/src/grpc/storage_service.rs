@@ -42,10 +42,10 @@ use tracing::instrument;
 use zerocopy::IntoBytes;
 
 use super::extract_correlation_id;
-use super::map_message_handle_error;
 use super::metadata_to_attribute;
 use super::rpc_code_to_str;
 use super::send_err;
+use super::simple_map_message_handle_error;
 use super::warn_error_to_status;
 use crate::grpc::get_user_id;
 use crate::legacy::rpc::storage_service_server::StorageService;
@@ -439,7 +439,7 @@ impl StorageService for LoreStorageService {
                         let results = resp.results.iter().map(|res| *res as i32).collect();
                         Response::new(lore_proto::QueryResponse { results })
                     })
-                    .map_err(map_message_handle_error)
+                    .map_err(simple_map_message_handle_error)
             })
             .await
     }
@@ -649,7 +649,7 @@ impl StorageService for LoreStorageService {
                                 healed: resp.healed as i32,
                             })
                         })
-                        .map_err(map_message_handle_error)
+                        .map_err(simple_map_message_handle_error)
                 }
                 .in_current_span(),
             )
@@ -695,7 +695,7 @@ impl StorageService for LoreStorageService {
                         MessageHandleError::MutableDataNotFound(_) => {
                             Status::not_found("Mutable key not found")
                         }
-                        other => map_message_handle_error(other),
+                        other => simple_map_message_handle_error(other),
                     })
             })
             .await
@@ -734,7 +734,7 @@ impl StorageService for LoreStorageService {
                 msg.handle_mutable(context, mutable_store)
                     .await
                     .map(|_| Response::new(lore_proto::MutableStoreResponse {}))
-                    .map_err(map_message_handle_error)
+                    .map_err(simple_map_message_handle_error)
             })
             .await
     }
@@ -785,7 +785,7 @@ impl StorageService for LoreStorageService {
                             ),
                         })
                     })
-                    .map_err(map_message_handle_error)
+                    .map_err(simple_map_message_handle_error)
             })
             .await
     }

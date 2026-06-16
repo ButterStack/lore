@@ -19,6 +19,9 @@ pub mod thinclient;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+
+use bytes::Bytes;
+
 mod replication_server;
 mod replication_service;
 pub mod tower;
@@ -69,40 +72,111 @@ pub fn is_code_considered_server_error(code: &Code) -> bool {
     )
 }
 
-pub(crate) fn map_message_handle_error(error: MessageHandleError) -> Status {
-    match error {
-        MessageHandleError::AuthorizationFailure(err) => {
-            Status::permission_denied(format!("Authorization failed {err}"))
-        }
-        MessageHandleError::MissingToken => Status::unauthenticated("Missing auth token"),
-        MessageHandleError::AlreadyConnected => Status::failed_precondition("Already connected"),
-        MessageHandleError::BranchExists => Status::already_exists("Branch already exists"),
-        MessageHandleError::BranchMismatch => Status::invalid_argument("Branch mismatch"),
-        MessageHandleError::BranchProtected => Status::permission_denied("Branch is protected"),
-        MessageHandleError::FragmentNotFound => Status::not_found("Fragment not found"),
-        MessageHandleError::HashMismatch => Status::invalid_argument("Hash mismatch"),
-        MessageHandleError::InvalidParentBranch => {
-            Status::invalid_argument("Invalid parent branch")
-        }
-        MessageHandleError::InternalError => Status::internal("Internal error"),
-        MessageHandleError::MutableDataNotFound(hash) => {
-            Status::not_found(format!("No data found for hash: {hash}"))
-        }
-        MessageHandleError::NoSuchBranch => Status::not_found("No such branch"),
-        MessageHandleError::NotConnected => Status::failed_precondition("Not connected"),
-        MessageHandleError::NotImplemented => Status::internal("Operation not implemented"),
-        MessageHandleError::QueryResultSizeMismatch => {
-            Status::internal("Query result size mismatch")
-        }
-        MessageHandleError::StoreFailure => Status::internal("Store failure"),
-        MessageHandleError::SlowDown => Status::unavailable("slowdown"),
-        MessageHandleError::Oversized => Status::out_of_range("Oversized fragment or blob"),
-        MessageHandleError::Metadata => Status::internal("Metadata failure"),
-        MessageHandleError::HashFailed => Status::invalid_argument("Hash failed"),
-        MessageHandleError::InvalidFragment => Status::invalid_argument("Invalid fragment"),
-        MessageHandleError::HandlerTimeout => Status::cancelled("Request Handler Timeout"),
-        MessageHandleError::SessionLimitReached => Status::unavailable("Session limit reached"),
-    }
+pub(crate) fn simple_map_message_handle_error(error: MessageHandleError) -> Status {
+    map_message_handle_error_to_status(&error, None, None)
+}
+
+pub fn map_message_handle_error_to_status(
+    error: &MessageHandleError,
+    message: Option<String>,
+    details: Option<Bytes>,
+) -> Status {
+    let (code, message) = match error {
+        MessageHandleError::AuthorizationFailure(err) => (
+            Code::PermissionDenied,
+            message.unwrap_or_else(|| format!("Authorization failed {err}")),
+        ),
+        MessageHandleError::MissingToken => (
+            Code::Unauthenticated,
+            message.unwrap_or_else(|| "Missing auth token".into()),
+        ),
+        MessageHandleError::AlreadyConnected => (
+            Code::FailedPrecondition,
+            message.unwrap_or_else(|| "Already connected".into()),
+        ),
+        MessageHandleError::BranchExists => (
+            Code::AlreadyExists,
+            message.unwrap_or_else(|| "Branch already exists".into()),
+        ),
+        MessageHandleError::BranchMismatch => (
+            Code::InvalidArgument,
+            message.unwrap_or_else(|| "Branch mismatch".into()),
+        ),
+        MessageHandleError::BranchProtected => (
+            Code::PermissionDenied,
+            message.unwrap_or_else(|| "Branch protected".into()),
+        ),
+        MessageHandleError::FragmentNotFound => (
+            Code::NotFound,
+            message.unwrap_or_else(|| "Fragment not found".into()),
+        ),
+        MessageHandleError::HashMismatch => (
+            Code::InvalidArgument,
+            message.unwrap_or_else(|| "Hash mismatch".into()),
+        ),
+        MessageHandleError::InvalidParentBranch => (
+            Code::InvalidArgument,
+            message.unwrap_or_else(|| "Invalid parent branch".into()),
+        ),
+        MessageHandleError::InternalError => (
+            Code::Internal,
+            message.unwrap_or_else(|| "Internal error".into()),
+        ),
+        MessageHandleError::MutableDataNotFound(hash) => (
+            Code::NotFound,
+            message.unwrap_or_else(|| format!("No data found for hash: {hash}")),
+        ),
+        MessageHandleError::NoSuchBranch => (
+            Code::NotFound,
+            message.unwrap_or_else(|| "No such branch".into()),
+        ),
+        MessageHandleError::NotConnected => (
+            Code::FailedPrecondition,
+            message.unwrap_or_else(|| "Not connected".into()),
+        ),
+        MessageHandleError::NotImplemented => (
+            Code::Internal,
+            message.unwrap_or_else(|| "Operation not implemented".into()),
+        ),
+        MessageHandleError::QueryResultSizeMismatch => (
+            Code::Internal,
+            message.unwrap_or_else(|| "Query result size mismatch".into()),
+        ),
+        MessageHandleError::StoreFailure => (
+            Code::Internal,
+            message.unwrap_or_else(|| "Store failure".into()),
+        ),
+        MessageHandleError::SlowDown => (
+            Code::ResourceExhausted,
+            message.unwrap_or_else(|| "slowdown".into()),
+        ),
+        MessageHandleError::Oversized => (
+            Code::OutOfRange,
+            message.unwrap_or_else(|| "Oversized fragment or blob".into()),
+        ),
+        MessageHandleError::Metadata => (
+            Code::Internal,
+            message.unwrap_or_else(|| "Metadata failure".into()),
+        ),
+        MessageHandleError::HashFailed => (
+            Code::InvalidArgument,
+            message.unwrap_or_else(|| "Hash failed".into()),
+        ),
+        MessageHandleError::InvalidFragment => (
+            Code::InvalidArgument,
+            message.unwrap_or_else(|| "Invalid fragment".into()),
+        ),
+        MessageHandleError::HandlerTimeout => (
+            Code::Cancelled,
+            message.unwrap_or_else(|| "Request Handler Timeout".into()),
+        ),
+        MessageHandleError::SessionLimitReached => (
+            Code::Unavailable,
+            message.unwrap_or_else(|| "Session limit reached".into()),
+        ),
+    };
+
+    Status::with_details(code, message, details.unwrap_or_default())
 }
 
 pub fn get_repository(metadata: &MetadataMap) -> Result<RepositoryId, Status> {

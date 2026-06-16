@@ -38,6 +38,7 @@ use crate::grpc::get_authorization;
 use crate::grpc::get_repository;
 use crate::grpc::get_user_id;
 use crate::grpc::log_server_error;
+use crate::grpc::map_message_handle_error_to_status;
 use crate::grpc::rpc_code_to_str;
 use crate::protocol::storage::copy::handle_copy;
 use crate::protocol::storage::messages::LoreResponse;
@@ -183,10 +184,10 @@ pub async fn handler(
                                                         source_address.into(),
                                                     )
                                                 }
-                                                _ => Status::with_details(
-                                                    Code::Internal,
-                                                    format!("Error copying fragment: {err}"),
-                                                    source_address.into(),
+                                                err => map_message_handle_error_to_status(
+                                                    err,
+                                                    Some(format!("Error copying fragment: {err}")),
+                                                    Some(source_address.into()),
                                                 ),
                                             }),
                                         }

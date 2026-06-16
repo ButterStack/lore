@@ -37,6 +37,7 @@ use crate::grpc::extract_correlation_id;
 use crate::grpc::get_repository;
 use crate::grpc::get_user_id;
 use crate::grpc::log_server_error;
+use crate::grpc::map_message_handle_error_to_status;
 use crate::grpc::rpc_code_to_str;
 use crate::protocol::storage::get::handle_get_metadata;
 use crate::protocol::storage::messages::LoreResponse;
@@ -137,10 +138,10 @@ pub async fn handler(
                                                 address.into(),
                                             )
                                         }
-                                        _ => Status::with_details(
-                                            Code::Internal,
-                                            format!("Error from get_metadata handler: {e}"),
-                                            address.into(),
+                                        err => map_message_handle_error_to_status(
+                                            err,
+                                            Some(format!("Error from get_metadata handler: {e}")),
+                                            Some(address.into()),
                                         ),
                                     }),
                                 },

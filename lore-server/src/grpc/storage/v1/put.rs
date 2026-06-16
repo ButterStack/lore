@@ -36,6 +36,7 @@ use crate::grpc::extract_correlation_id;
 use crate::grpc::get_repository;
 use crate::grpc::get_user_id;
 use crate::grpc::log_server_error;
+use crate::grpc::map_message_handle_error_to_status;
 use crate::grpc::rpc_code_to_str;
 use crate::protocol::storage::messages::LoreResponse;
 use crate::protocol::storage::put::UnvalidatedPut;
@@ -142,9 +143,13 @@ pub async fn handler(
                                         Ok(_) => Err(Status::internal(
                                             "Put handler returned the wrong response type",
                                         )),
-                                        Err(err) => Err(Status::internal(format!(
-                                            "Error storing fragment {address}: {err}",
-                                        ))),
+                                        Err(err) => Err(
+                                            map_message_handle_error_to_status(
+                                                &err,
+                                                Some(format!("Error storing fragment {address}: {err}")),
+                                                None
+                                            )
+                                        ),
                                     }
                                 }
                                 Err(status) => Err(status),
