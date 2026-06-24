@@ -177,20 +177,17 @@ pub async fn handler(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use axum::Extension;
-    use axum::Router;
     use axum::http::StatusCode;
-    use axum::routing;
     use axum_test::TestServer;
     use lore_base::runtime::LORE_CONTEXT;
     use rand::random;
     use serde_json::json;
 
-    use crate::auth::jwt::AuthorizationToken;
+    use crate::http::server::LoreHttpServerSettings;
     use crate::http::server::PresignConfig;
+    use crate::http::server::ServerHealth;
     use crate::http::server::ServerState;
+    use crate::http::server::create_router;
     use crate::store::test_store_create;
 
     fn test_presign_config() -> PresignConfig {
@@ -204,16 +201,6 @@ mod tests {
         }
     }
 
-    fn handler_router(state: ServerState) -> Router {
-        Router::new()
-            .route(
-                "/repository/{repository_id}/content/{address}/presign",
-                routing::post(super::handler),
-            )
-            .layer(Extension(None::<AuthorizationToken>))
-            .with_state(Arc::new(state))
-    }
-
     #[tokio::test]
     async fn returns_404_when_address_not_found() {
         let (immutable_store, mutable_store, execution) =
@@ -223,6 +210,7 @@ mod tests {
                 let repository = random::<lore_revision::lore::RepositoryId>();
                 let address = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff-ffffffffffffffffffffffffffffffff";
 
+                let test_health = ServerHealth::new_without_availability(immutable_store.clone());
                 let state = ServerState {
                     immutable_store,
                     mutable_store,
@@ -231,11 +219,12 @@ mod tests {
                     presign_config: Some(test_presign_config()),
                 };
                 let repo_hex = format!("{repository}");
-                let app = handler_router(state);
+                let settings = LoreHttpServerSettings::default();
+                let app = create_router(state, test_health, &settings);
                 let server = TestServer::new(app).unwrap();
 
                 let response = server
-                    .post(&format!("/repository/{repo_hex}/content/{address}/presign"))
+                    .post(&format!("/v1/repository/{repo_hex}/content/{address}/presign"))
                     .json(&json!({"ttl_seconds": 3600}))
                     .await;
 

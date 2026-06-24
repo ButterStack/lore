@@ -191,7 +191,6 @@ pub async fn handler(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use std::time::SystemTime;
     use std::time::UNIX_EPOCH;
 
@@ -205,9 +204,11 @@ mod tests {
     use crate::http::presign_token::CURRENT_TOKEN_VERSION;
     use crate::http::presign_token::PresignTokenPayload;
     use crate::http::presign_token::sign;
-    use crate::http::presigned;
+    use crate::http::server::LoreHttpServerSettings;
     use crate::http::server::PresignConfig;
+    use crate::http::server::ServerHealth;
     use crate::http::server::ServerState;
+    use crate::http::server::create_router;
     use crate::store::test_store_create;
 
     fn test_presign_config() -> PresignConfig {
@@ -253,6 +254,7 @@ mod tests {
                 let repo_hex = format!("{repository}");
                 let token = valid_token(&repo_hex, address, &config);
 
+                let test_health = ServerHealth::new_without_availability(immutable_store.clone());
                 let state = ServerState {
                     immutable_store,
                     mutable_store,
@@ -260,11 +262,12 @@ mod tests {
                     max_file_size: 100,
                     presign_config: Some(config),
                 };
-                let app = presigned::create_router(Arc::new(state));
+                let settings = LoreHttpServerSettings::default();
+                let app = create_router(state, test_health, &settings);
                 let server = TestServer::new(app).unwrap();
 
                 let response = server
-                    .get(&format!("/{repo_hex}/{address}"))
+                    .get(&format!("/v1/presigned/{repo_hex}/{address}"))
                     .add_query_param("token", token)
                     .await;
 
@@ -297,6 +300,7 @@ mod tests {
                 };
                 let token = sign(&payload, &config.hmac_key);
 
+                let test_health = ServerHealth::new_without_availability(immutable_store.clone());
                 let state = ServerState {
                     immutable_store,
                     mutable_store,
@@ -304,11 +308,12 @@ mod tests {
                     max_file_size: 100,
                     presign_config: Some(config),
                 };
-                let app = presigned::create_router(Arc::new(state));
+                let settings = LoreHttpServerSettings::default();
+                let app = create_router(state, test_health, &settings);
                 let server = TestServer::new(app).unwrap();
 
                 let response = server
-                    .get(&format!("/{repo_hex}/{address}"))
+                    .get(&format!("/v1/presigned/{repo_hex}/{address}"))
                     .add_query_param("token", token)
                     .await;
 
@@ -343,6 +348,7 @@ mod tests {
                 let address_str = format!("{address}");
                 let token = valid_token(&repo_hex, &address_str, &config);
 
+                let test_health = ServerHealth::new_without_availability(immutable_store.clone());
                 let state = ServerState {
                     immutable_store,
                     mutable_store,
@@ -350,16 +356,54 @@ mod tests {
                     max_file_size: 100,
                     presign_config: Some(config),
                 };
-                let app = presigned::create_router(Arc::new(state));
+                let settings = LoreHttpServerSettings::default();
+                let app = create_router(state, test_health, &settings);
                 let server = TestServer::new(app).unwrap();
 
                 let response = server
-                    .get(&format!("/{repo_hex}/{address_str}"))
+                    .get(&format!("/v1/presigned/{repo_hex}/{address_str}"))
                     .add_query_param("token", token)
                     .await;
 
                 assert_eq!(response.status_code(), StatusCode::OK);
                 assert_eq!(response.as_bytes(), &payload[..]);
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn returns_400_when_no_token_query_param() {
+        let (immutable_store, mutable_store, execution) =
+            test_store_create().await.expect("Failed to create stores");
+        LORE_CONTEXT
+            .scope(execution, async move {
+                let repository = random::<RepositoryId>();
+                let address = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff-ffffffffffffffffffffffffffffffff";
+
+                let config = test_presign_config();
+                let repo_hex = format!("{repository}");
+
+                let test_health = ServerHealth::new_without_availability(immutable_store.clone());
+                let state = ServerState {
+                    immutable_store,
+                    mutable_store,
+                    jwt_verifier: None,
+                    max_file_size: 100,
+                    presign_config: Some(config),
+                };
+                let settings = LoreHttpServerSettings::default();
+                let app = create_router(state, test_health, &settings);
+                let server = TestServer::new(app).unwrap();
+
+                let response = server
+                    .get(&format!("/v1/presigned/{repo_hex}/{address}"))
+                    .await;
+
+                assert_eq!(response.status_code(), StatusCode::BAD_REQUEST);
+                assert_eq!(
+                    response.text(),
+                    "Failed to deserialize query string: missing field `token`"
+                );
             })
             .await;
     }
